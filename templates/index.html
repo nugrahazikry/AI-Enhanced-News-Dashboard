@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Article Monitoring Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body data-default-keyword="{{ default_keyword }}">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-newspaper"></i>
+                    <span>NewsMonitor</span>
+                </div>
+            </div>
+
+            <div class="sidebar-form">
+
+                <!-- 1. Keyword -->
+                <div class="form-group">
+                    <label for="scraper-keyword"><i class="fas fa-search"></i> Keyword</label>
+                    <input type="text" id="scraper-keyword" placeholder="e.g. Pertamina" />
+                    <span class="field-warning" id="warn-keyword" style="display:none;">Please enter a keyword.</span>
+                </div>
+
+                <!-- 2. Date range -->
+                <div class="form-group">
+                    <label for="scraper-start-date"><i class="fas fa-calendar-alt"></i> Start Date</label>
+                    <input type="date" id="scraper-start-date" />
+                    <span class="field-warning" id="warn-start-date" style="display:none;">Please select a start date.</span>
+                </div>
+                <div class="form-group">
+                    <label for="scraper-end-date"><i class="fas fa-calendar-check"></i> End Date</label>
+                    <input type="date" id="scraper-end-date" />
+                    <span class="field-warning" id="warn-end-date" style="display:none;">Please select an end date.</span>
+                </div>
+
+                <!-- 3. Language -->
+                <div class="form-group">
+                    <label for="scraper-language"><i class="fas fa-language"></i> Language</label>
+                    <select id="scraper-language">
+                        <option value="id" selected>Indonesian (ID)</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+
+                <!-- 4. Country -->
+                <div class="form-group">
+                    <label for="scraper-country"><i class="fas fa-globe"></i> Country</label>
+                    <select id="scraper-country">
+                        <option value="ID" selected>Indonesia (ID)</option>
+                        <option value="US">United States (US)</option>
+                    </select>
+                </div>
+
+                <!-- 5. Run button -->
+                <button class="btn-run" id="scraper-run-btn">
+                    <i class="fas fa-play"></i> Run Analysis
+                </button>
+
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <!-- Full-area loading overlay -->
+            <div id="main-loading-overlay" style="display:none;">
+                <div class="main-loading-box">
+                    <i class="fas fa-circle-notch fa-spin"></i>
+                    <span id="main-loading-title">Scraping news articles...</span>
+                </div>
+            </div>
+            <header class="top-header">
+                <div class="header-left">
+                    <h1>AI-Enhanced News Dashboard <span id="header-keyword" style="font-weight:500; color:#4f46e5;"></span></h1>
+                    <p class="subtitle">Data-Driven Insights into Global and National News Narratives</p>
+                </div>
+                <div class="header-right">
+                    <div class="date-display">
+                        <i class="fas fa-calendar" style="font-size:0.75rem;"></i>
+                        <span id="current-date"></span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Summary Cards -->
+            <section class="summary-cards">
+                <div class="card summary-card total">
+                    <div class="summary-card-top">
+                        <span class="card-label"><i class="fas fa-newspaper"></i> Total Mentions</span>
+                        <div class="card-trend-icon"><i class="fas fa-newspaper"></i></div>
+                    </div>
+                    <p class="card-value" id="total-news">0</p>
+                    <div class="card-change flat" id="total-change">
+                        <i class="fas fa-minus"></i><span>&nbsp;-- vs last week</span>
+                    </div>
+                </div>
+                <div class="card summary-card positive">
+                    <div class="summary-card-top">
+                        <span class="card-label"><i class="fas fa-smile"></i> Positive Mentions</span>
+                        <div class="card-trend-icon"><i class="fas fa-arrow-trend-up"></i></div>
+                    </div>
+                    <p class="card-value" id="positive-news">0</p>
+                    <div class="card-change flat" id="positive-change">
+                        <i class="fas fa-minus"></i><span>&nbsp;-- vs last week</span>
+                    </div>
+                </div>
+                <div class="card summary-card neutral">
+                    <div class="summary-card-top">
+                        <span class="card-label"><i class="fas fa-meh"></i> Neutral Mentions</span>
+                        <div class="card-trend-icon"><i class="fas fa-minus"></i></div>
+                    </div>
+                    <p class="card-value" id="neutral-news">0</p>
+                    <div class="card-change flat" id="neutral-change">
+                        <i class="fas fa-minus"></i><span>&nbsp;-- vs last week</span>
+                    </div>
+                </div>
+                <div class="card summary-card negative">
+                    <div class="summary-card-top">
+                        <span class="card-label"><i class="fas fa-frown"></i> Negative Mentions</span>
+                        <div class="card-trend-icon"><i class="fas fa-arrow-trend-down"></i></div>
+                    </div>
+                    <p class="card-value" id="negative-news">0</p>
+                    <div class="card-change flat" id="negative-change">
+                        <i class="fas fa-minus"></i><span>&nbsp;-- vs last week</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====== OVERVIEW SECTION (Dashboard) ====== -->
+            <div id="overview-section">
+
+                <!-- Row 1: Sentiment Trend + right column (2 Pies) -->
+                <section class="charts-row trend-pies-row">
+                    <div class="card chart-card trend-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-chart-area"></i> News Volume &amp; Sentiment Trend</h3>
+                        </div>
+                        <div class="chart-container">
+                            <div id="sentimentTrendChart"></div>
+                        </div>
+                    </div>
+                    <!-- Right column: stacked pies -->
+                    <div class="pies-treemap-col">
+                        <div class="card chart-card pie-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-trophy"></i> Share of Voice by Top Media</h3>
+                            </div>
+                            <div class="chart-container-pie">
+                                <canvas id="sovPieChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card chart-card pie-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-user-tag"></i> Top Entities Share</h3>
+                            </div>
+                            <div class="chart-container-pie">
+                                <canvas id="entityPieChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Row 2: Top Sources / Topics / Entities by Sentiment -->
+                <section class="charts-row three-columns">
+                    <div class="card chart-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-building"></i> Top Sources by Sentiment</h3>
+                        </div>
+                        <div class="chart-container-bar">
+                            <canvas id="topSourcesChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card chart-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-tags"></i> Top Topics by Sentiment</h3>
+                        </div>
+                        <div class="chart-container-bar">
+                            <canvas id="topTopicsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card chart-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-user-tag"></i> Top Entities by Sentiment</h3>
+                        </div>
+                        <div class="chart-container-bar">
+                            <canvas id="topEntitiesChart"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- AI Insight Summarization Section -->
+                <section class="ai-insight-section">
+                    <div class="card news-section-card">
+                        <div class="news-controls-header">
+                            <div class="news-control-item active">
+                                <i class="fas fa-robot"></i>
+                                <span>AI Insight Summarization</span>
+                            </div>
+                        </div>
+                        <div class="news-content-area">
+                            <div class="ai-insight-body">
+                                <div id="ai-insight-loading" style="display:none;" class="ai-loading">
+                                    <i class="fas fa-spinner fa-spin"></i> Generating insights, this may take a moment...
+                                </div>
+                                <div id="ai-insight-content">
+                                    <p class="ai-insight-placeholder">Generating AI-powered analysis of the news data...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Recent News Section -->
+                <section class="recent-news-section" id="recent-news-section">
+                    <div class="card news-section-card">
+                        <div class="news-controls-header">
+                            <div class="news-control-item active">
+                                <i class="fas fa-newspaper"></i>
+                                <span>Recent News</span>
+                            </div>
+                            <div class="news-control-item">
+                                <i class="fas fa-filter"></i>
+                                <span>Filter by Source</span>
+                                <select id="source-filter" class="filter-dropdown">
+                                    <option value="">All Sources</option>
+                                </select>
+                            </div>
+                            <div class="news-control-item">
+                                <i class="fas fa-tags"></i>
+                                <span>Filter by Topic</span>
+                                <select id="topic-filter" class="filter-dropdown">
+                                    <option value="">All Topics</option>
+                                </select>
+                            </div>
+                            <div class="news-control-item">
+                                <i class="fas fa-user-tag"></i>
+                                <span>Filter by Entity</span>
+                                <select id="entity-filter" class="filter-dropdown">
+                                    <option value="">All Entities</option>
+                                </select>
+                            </div>
+                            <div class="news-control-item">
+                                <i class="fas fa-heart"></i>
+                                <span>Filter by Sentiment</span>
+                                <select id="sentiment-filter" class="filter-dropdown">
+                                    <option value="">All Sentiments</option>
+                                    <option value="positif">Positif</option>
+                                    <option value="netral">Netral</option>
+                                    <option value="negatif">Negatif</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="news-content-area">
+                            <div class="news-content-header">
+                                <h4>News Content</h4>
+                                <div class="news-content-header-right">
+                                    <div class="news-count">
+                                        <span id="filtered-news-count">0</span> articles found
+                                    </div>
+                                    <button id="download-excel-btn" class="btn-download-excel" title="Download as Excel">
+                                        <i class="fas fa-download"></i> Download Excel
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="news-list-container" id="news-list">
+                                <!-- News items will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div><!-- end #overview-section -->
+
+            <!-- ====== NEWS LIST SECTION ====== -->
+            <div id="news-list-section" style="display:none;">
+
+            <!-- ====== ANALYTICS SECTION ====== -->
+            <div id="analytics-section" style="display:none;">
+
+                <!-- Row A1: Topic Share Over Time -->
+                <section class="charts-row">
+                    <div class="card chart-card full-width">
+                        <div class="card-header">
+                            <h3><i class="fas fa-layer-group"></i> Topic Share Over Time</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="topicShareChart"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Row A2: Entity Mention Trend -->
+                <section class="charts-row">
+                    <div class="card chart-card full-width">
+                        <div class="card-header">
+                            <h3><i class="fas fa-chart-line"></i> Entity Mention Trend (Top 5)</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="entityTrendChart"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Row A3: Radar charts (Sentiment × Topic) -->
+                <section class="charts-row three-columns">
+                    <div class="card chart-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-circle-notch" style="color:#22c55e"></i> Positive Sentiment by Topic</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="radarPositifChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card chart-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-circle-notch" style="color:#64748b"></i> Neutral Sentiment by Topic</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="radarNetralChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card chart-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-circle-notch" style="color:#ef4444"></i> Negative Sentiment by Topic</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="radarNegatifChart"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+            </div><!-- end #analytics-section -->
+
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
