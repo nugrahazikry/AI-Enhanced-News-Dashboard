@@ -7,6 +7,7 @@ A web application built with Flask that monitors and analyses news articles for 
 
 - [For Developers](#for-developer)
   - [Project Structure](#project-structure)
+  - [How to Run with Docker (Recommended)](#how-to-run-with-docker-recommended)
   - [How to Run Locally](#how-to-run-the-apps-in-local)
 - [For Users](#for-user)
   - [Apps Features](#apps-features)
@@ -19,55 +20,125 @@ A web application built with Flask that monitors and analyses news articles for 
 
 ```
 .
-├── app.py                          # Main Flask application and API routes
-├── requirements.txt                # Python dependencies
+├── docker-compose.yml              # Orchestrates frontend + backend containers
+├── Makefile                        # Shortcuts for common Docker operations
 ├── readme.md                       # Project documentation
+├── .env                            # Environment variables (GEN_AI_API_KEY) — not committed
+├── .env.example                    # Template for .env — safe to commit
 ├── .gitignore                      # Git ignore rules
 ├── .dockerignore                   # Docker ignore rules
-├── .env                            # Environment variables (GEN_AI_API_KEY) — not committed
-├── images/
-│   ├── main_visualization.png      # Screenshot: full dashboard overview
-│   ├── visualization_1.png         # Screenshot: sidebar controls and KPI cards
-│   ├── visualization_2.png         # Screenshot: KPI cards detail
-│   ├── visualization_3.png         # Screenshot: sentiment trend and share-of-voice charts
-│   ├── visualization_4.png         # Screenshot: top sources, topics, and entities bar charts
-│   ├── visualization_5.png         # Screenshot: AI insight summarization panel
-│   └── visualization_6.png         # Screenshot: recent news content table
-├── data/
-│   ├── makan_bergizi_gratis_news.xlsx       # Sample enriched news dataset (Excel)
-│   └── finished_makan_bergizi_gratis.parquet # Cached enriched dataset (Parquet)
-├── scripts/
-│   ├── google_news_scraper.py      # Google News RSS scraper (day-looping for max results)
-│   ├── data_processing.py          # AI pipeline: sentiment, NER, and topic classification
-│   └── ai_generate_insight.py      # AI narrative insight generation
-├── static/
-│   ├── css/
-│   │   └── style.css               # Application stylesheet
-│   └── js/
-│       └── main.js                 # Client-side JavaScript for UI interactions
-└── templates/
-    └── index.html                  # Main Jinja2 HTML template
+│
+├── backend/                        # Flask API + AI processing
+│   ├── app.py                      # Main Flask application and API routes
+│   ├── requirements.txt            # Python dependencies
+│   ├── Dockerfile                  # Multi-stage Docker image for the backend
+│   ├── data/
+│   │   ├── makan_bergizi_gratis_news.xlsx        # Sample enriched news dataset (Excel)
+│   │   └── finished_makan_bergizi_gratis.parquet # Cached enriched dataset (Parquet)
+│   ├── images/
+│   │   ├── main_visualization.png  # Screenshot: full dashboard overview
+│   │   ├── visualization_1.png     # Screenshot: sidebar controls and KPI cards
+│   │   ├── visualization_2.png     # Screenshot: KPI cards detail
+│   │   ├── visualization_3.png     # Screenshot: sentiment trend and share-of-voice charts
+│   │   ├── visualization_4.png     # Screenshot: top sources, topics, and entities bar charts
+│   │   ├── visualization_5.png     # Screenshot: AI insight summarization panel
+│   │   └── visualization_6.png     # Screenshot: recent news content table
+│   └── scripts/
+│       ├── google_news_scraper.py  # Google News RSS scraper (day-looping for max results)
+│       ├── data_processing.py      # AI pipeline: sentiment, NER, and topic classification
+│       └── ai_generate_insight.py  # AI narrative insight generation
+│
+└── frontend/                       # Nginx static server + reverse proxy
+    ├── Dockerfile                  # Nginx Docker image for serving static assets
+    ├── nginx.conf                  # Nginx config: serves /static/, proxies all else to backend
+    ├── static/
+    │   ├── css/
+    │   │   └── style.css           # Application stylesheet
+    │   └── js/
+    │       └── main.js             # Client-side JavaScript for UI interactions
+    └── templates/
+        └── index.html              # Main Jinja2 HTML template
 ```
 
 **Key backend files:**
 
 | File | Description |
 |---|---|
-| `app.py` | Main Flask application. Defines API routes (`/`, `/api/data/<keyword>`, `/api/run_analysis`, `/api/insight`), loads and caches the news dataset, computes all chart data server-side, and streams AI insights via Server-Sent Events |
-| `scripts/google_news_scraper.py` | `GoogleNewsScraper` class. Queries Google News RSS day-by-day across a date range to maximise article yield, parses XML responses, and returns a structured DataFrame |
-| `scripts/data_processing.py` | `run_processing_pipeline()`. Sends article headlines in batches to Gemini AI and parses JSON responses containing sentiment, NER entities, and topic labels for each article |
-| `scripts/ai_generate_insight.py` | `generate_insight()`. Builds structured prompts from the filtered dataset and streams a narrative insight — broken into source analysis, entity analysis, and topic analysis — back to the frontend |
+| `backend/app.py` | Main Flask application. Defines API routes (`/`, `/api/data/<keyword>`, `/api/scrape`, `/api/download/<keyword>`, `/api/ai_insight/<keyword>`), loads and caches the news dataset, computes all chart data server-side, and streams scrape progress via Server-Sent Events |
+| `backend/scripts/google_news_scraper.py` | `GoogleNewsScraper` class. Queries Google News RSS day-by-day across a date range to maximise article yield, parses XML responses, and returns a structured DataFrame |
+| `backend/scripts/data_processing.py` | `run_processing_pipeline()`. Sends article headlines in batches to Gemini AI and parses JSON responses containing sentiment, NER entities, and topic labels for each article |
+| `backend/scripts/ai_generate_insight.py` | `generate_insight()`. Builds structured prompts from the filtered dataset and returns a narrative insight covering source, entity, and topic analysis |
 
 **Key frontend files:**
 
 | File | Description |
 |---|---|
-| `templates/index.html` | Main Jinja2 HTML template. Contains the keyword selector, date-range picker, Run Analysis button, summary KPI cards, and all chart containers |
-| `static/css/style.css` | Stylesheet for the entire web UI — layout, card components, chart containers, sidebar, and responsive styles |
-| `static/js/main.js` | Client-side JavaScript. Fetches chart data from `/api/data/<keyword>`, renders all Plotly/Chart.js charts, triggers scraping and AI processing via `/api/run_analysis`, and streams AI insights via EventSource |
+| `frontend/templates/index.html` | Main Jinja2 HTML template. Contains the keyword selector, date-range picker, Run Analysis button, summary KPI cards, and all chart containers |
+| `frontend/static/css/style.css` | Stylesheet for the entire web UI — layout, card components, chart containers, sidebar, and responsive styles |
+| `frontend/static/js/main.js` | Client-side JavaScript. Fetches chart data from `/api/data/<keyword>`, renders all charts, triggers scraping and AI processing, and streams progress via EventSource |
+| `frontend/nginx.conf` | Nginx configuration. Serves `/static/` assets directly from disk; proxies all other requests (pages, API calls, SSE streams) to the Flask backend |
+
+**Docker / deployment files:**
+
+| File | Description |
+|---|---|
+| `backend/Dockerfile` | Multi-stage Python 3.11-slim image. Stage 1 installs dependencies; Stage 2 copies only the final packages and source — no build tools or pip cache in the final image |
+| `frontend/Dockerfile` | Nginx stable-alpine image. Copies static assets and the custom Nginx config |
+| `docker-compose.yml` | Wires the two services. Backend port 5000 is internal-only; frontend exposes port 80 to the host |
+| `Makefile` | Convenience targets for common Docker Compose operations (see below) |
 
 
-## How to run the apps in local
+## How to Run with Docker (Recommended)
+
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) and a [Google AI Studio](https://aistudio.google.com/) API key.
+
+**1. Clone the repository and navigate to the project directory:**
+
+```bash
+cd path/to/prod_v1
+```
+
+**2. Create your `.env` file from the template:**
+
+```bash
+cp .env.example .env
+```
+
+Then open `.env` and replace the placeholder with your real Gemini API key:
+
+```
+GEN_AI_API_KEY=your_google_ai_studio_api_key_here
+```
+
+**3. Build and start both containers using Make:**
+
+```bash
+make up
+```
+
+**4. Access the application in a browser:**
+
+```
+http://localhost
+```
+
+### Makefile reference
+
+All Docker operations are wrapped in the `Makefile` at the project root:
+
+| Command | Description |
+|---|---|
+| `make build` | Build (or rebuild) all Docker images without starting them |
+| `make up` | Build images and start all containers in detached mode |
+| `make start` | Start already-built containers without rebuilding |
+| `make stop` | Stop running containers (keeps containers and images intact) |
+| `make down` | Stop and remove containers and the default network |
+| `make clean` | Full teardown — removes containers, images, volumes, and orphaned resources |
+| `make logs` | Tail live logs from all containers (Ctrl-C to exit) |
+| `make help` | Show the full command reference |
+
+
+## How to Run the Apps in Local
 
 **Prerequisites:** Python 3.11 and a [Google AI Studio](https://aistudio.google.com/) API key.
 
@@ -96,10 +167,10 @@ source venv/bin/activate
 **4. Install all required dependencies:**
 
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
-**5. Create a `.env` file and add your Gemini API key:**
+**5. Create a `.env` file in the project root and add your Gemini API key:**
 
 ```
 GEN_AI_API_KEY=your_google_ai_studio_api_key_here
@@ -108,13 +179,13 @@ GEN_AI_API_KEY=your_google_ai_studio_api_key_here
 **6. Run the application:**
 
 ```bash
-python app.py
+python backend/app.py
 ```
 
 **7. Access the application in a browser:**
 
 ```
-http://127.0.0.1:5000
+http://localhost:5000
 ```
 
 # For User
@@ -210,7 +281,7 @@ Each row shows the article headline (linked to the original source), publication
 
 ### Step 1 — Open the application
 
-Navigate to `http://127.0.0.1:5000` (local) in a web browser.
+Navigate to `http://localhost` (Docker) or `http://localhost:5000` (local) in a web browser.
 
 ### Step 2 — Select a keyword
 

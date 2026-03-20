@@ -1,0 +1,31 @@
+name: news-monitoring-prod_v1
+
+services:
+  # ── Flask API + Jinja2 rendering ──────────────────────────────────────────
+  backend:
+    build:
+      context: .                   # prod_v1/ as the Docker build context
+      dockerfile: backend/Dockerfile
+    image: news-monitoring-prod_v1-backend
+    container_name: news-monitoring-prod_v1-backend
+    expose:
+      - "5000"                     # only reachable by the frontend container
+    env_file:
+      - path: .env                 # GEN_AI_API_KEY and other secrets
+        required: false
+    volumes:
+      - ./backend/data:/app/backend/data   # persist/share data files
+    restart: unless-stopped
+
+  # ── Nginx static server + reverse proxy ───────────────────────────────────
+  frontend:
+    build:
+      context: .                   # prod_v1/ as the Docker build context
+      dockerfile: frontend/Dockerfile
+    image: news-monitoring-prod_v1-frontend
+    container_name: news-monitoring-prod_v1-frontend
+    ports:
+      - "80:80"                    # app is available at http://localhost
+    depends_on:
+      - backend
+    restart: unless-stopped
