@@ -1,6 +1,6 @@
 # News Article Monitoring
 
-A web application built with Flask that monitors and analyses news articles for any keyword. It scrapes articles from **Google News RSS** on-demand, then uses **Google Gemini AI** to automatically classify each article's sentiment (positive / neutral / negative), extract named entities (NER), and assign a news topic. The resulting dataset is surfaced through an interactive dashboard with 10+ chart types — including time-series trends, sentiment heatmaps, source bubble charts, Sankey diagrams, and radar charts — and an AI-generated narrative insight summarising coverage patterns.
+A web application built with Flask that monitors and analyses news articles for any keyword. It scrapes articles from **Google News RSS** on-demand, then uses **Google Gemini AI** to automatically classify each article's sentiment (positive / neutral / negative), extract named entities (NER), and assign a news topic. The resulting dataset is surfaced through an interactive dashboard with multiple chart types and an AI-generated narrative insight summarising coverage patterns.
 
 
 # Table of Contents
@@ -8,7 +8,6 @@ A web application built with Flask that monitors and analyses news articles for 
 - [For Developers](#for-developer)
   - [Project Structure](#project-structure)
   - [How to Run Locally](#how-to-run-the-apps-in-local)
-  - [How to Deploy to Cloud Run](#how-to-deploy-the-apps-to-cloud-run)
 - [For Users](#for-user)
   - [Apps Features](#apps-features)
   - [How to Use the Apps](#how-to-use-the-apps)
@@ -23,9 +22,20 @@ A web application built with Flask that monitors and analyses news articles for 
 ├── app.py                          # Main Flask application and API routes
 ├── requirements.txt                # Python dependencies
 ├── readme.md                       # Project documentation
+├── .gitignore                      # Git ignore rules
+├── .dockerignore                   # Docker ignore rules
 ├── .env                            # Environment variables (GEN_AI_API_KEY) — not committed
+├── images/
+│   ├── main_visualization.png      # Screenshot: full dashboard overview
+│   ├── visualization_1.png         # Screenshot: sidebar controls and KPI cards
+│   ├── visualization_2.png         # Screenshot: KPI cards detail
+│   ├── visualization_3.png         # Screenshot: sentiment trend and share-of-voice charts
+│   ├── visualization_4.png         # Screenshot: top sources, topics, and entities bar charts
+│   ├── visualization_5.png         # Screenshot: AI insight summarization panel
+│   └── visualization_6.png         # Screenshot: recent news content table
 ├── data/
-│   └── *.xlsx / *.parquet          # Scraped and enriched news datasets
+│   ├── makan_bergizi_gratis_news.xlsx       # Sample enriched news dataset (Excel)
+│   └── finished_makan_bergizi_gratis.parquet # Cached enriched dataset (Parquet)
 ├── scripts/
 │   ├── google_news_scraper.py      # Google News RSS scraper (day-looping for max results)
 │   ├── data_processing.py          # AI pipeline: sentiment, NER, and topic classification
@@ -107,94 +117,96 @@ python app.py
 http://127.0.0.1:5000
 ```
 
-## How to deploy the apps to Cloud Run
-
-**Prerequisites:** Docker Desktop and the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) installed and authenticated.
-
-**1. Build the Docker image:**
-
-```bash
-docker build -t news-monitoring:latest .
-```
-
-**2. Tag the image for Artifact Registry:**
-
-```bash
-docker tag news-monitoring:latest \
-  <region>-docker.pkg.dev/<your-gcp-project>/<your-repo>/news-monitoring:latest
-```
-
-**3. Push the image:**
-
-```bash
-docker push <region>-docker.pkg.dev/<your-gcp-project>/<your-repo>/news-monitoring:latest
-```
-
-**4. Deploy to Cloud Run:**
-
-```bash
-gcloud run deploy news-monitoring \
-  --image <region>-docker.pkg.dev/<your-gcp-project>/<your-repo>/news-monitoring:latest \
-  --region <region> \
-  --platform managed \
-  --allow-unauthenticated \
-  --set-env-vars GEN_AI_API_KEY=<your_api_key>
-```
-
-> **Note:** Replace `<region>`, `<your-gcp-project>`, `<your-repo>`, and `<your_api_key>` with your own values. Never commit secrets — use Cloud Run's Secret Manager integration for production deployments.
-
-
 # For User
 
 ## Apps Features
 
-The application consists of three main areas accessible from a single-page dashboard.
+The application consists of five main areas accessible from a single-page dashboard.
+
+<p align="center"><img src="images/main_visualization.png" alt="Main Visualization"></p>
+
+---
 
 ### 1. Keyword Selector & Run Analysis
 
-A dropdown at the top of the page lists all monitored keywords. Selecting a keyword instantly refreshes all charts with pre-loaded data for that keyword. The **Run Analysis** button triggers a live scrape of Google News for the selected keyword across a specified date range, runs the AI enrichment pipeline (sentiment, NER, topics), and reloads the dashboard with fresh results.
+A sidebar on the left provides controls for:
+
+<p align="center"><img src="images/visualization_1.png" alt="Sidebar controls"></p>
+
+- **Keyword** — type or select the topic to monitor (e.g. "Pertamina")
+- **Start Date / End Date** — date range for the news scrape
+- **Language & Country** — locale settings passed to Google News RSS
+- **Run Analysis** button — triggers a live scrape + AI enrichment pipeline and reloads all charts with fresh results
+
+---
 
 ### 2. Summary KPI Cards
 
-Four summary cards are shown at the top of the dashboard:
+Four summary cards are displayed at the top of the main panel:
+
+<p align="center"><img src="images/visualization_2.png" alt="Summary KPI Cards"></p>
 
 | Card | Description |
 |---|---|
-| **Total News** | Total number of articles for the selected keyword, with week-over-week change |
-| **Positive** | Count and percentage of positive articles, with week-over-week change |
-| **Neutral** | Count and percentage of neutral articles, with week-over-week change |
-| **Negative** | Count and percentage of negative articles, with week-over-week change |
+| **Total Mentions** | Total number of articles for the selected keyword, with week-over-week change |
+| **Positive Mentions** | Count of positive articles with week-over-week % change |
+| **Neutral Mentions** | Count of neutral articles with week-over-week % change |
+| **Negative Mentions** | Count of negative articles with week-over-week % change |
+
+---
 
 ### 3. Interactive Charts
 
-The dashboard includes 10+ chart types for deep analysis:
+The dashboard includes multiple chart types for deep analysis. The first section covers volume trends and share-of-voice:
+
+<p align="center"><img src="images/visualization_3.png" alt="Line and pie chart"></p>
 
 | Chart | Description |
 |---|---|
-| **News Volume Over Time** | Daily article count as a line chart |
-| **Sentiment Over Time** | Daily breakdown of positive / neutral / negative articles |
-| **Top Sources by Sentiment** | Horizontal stacked bar chart of the top 10 news sources |
-| **Top Topics by Sentiment** | Horizontal stacked bar showing sentiment per news topic category |
-| **Top Entities (NER)** | Top 10 named entities mentioned, coloured by sentiment |
-| **Source Bubble Chart** | Scatter plot of volume vs. negativity rate per source |
-| **Activity Heatmap** | Publication frequency by day-of-week and hour-of-day |
-| **Topic × Entity Heatmap** | Cross-tabulation of dominant sentiment per topic-entity pair |
-| **Topic Radar** | Radar chart of sentiment distribution across top 8 topics |
-| **Source Radar** | Radar chart of sentiment distribution across top 10 sources |
-| **Topic Share Over Time** | Stacked area chart of the top 5 topics per day |
-| **Entity Mention Trend** | Line chart of the top 5 entity mentions over time |
-| **Source Trend** | Line chart of the top 5 news sources over time |
-| **Sentiment → Topic Sankey** | Flow diagram from sentiment labels to topic categories |
+| **News Volume & Sentiment Trend** | Daily article count with positive / neutral / negative sentiment overlay as a multi-line chart |
+| **Share of Voice by Top Media** | Donut chart showing each source's share of total article volume |
+| **Top Entities Share** | Donut chart of the most-mentioned named entities across all articles |
+
+The second section breaks down sentiment across sources, topics, and entities:
+
+<p align="center"><img src="images/visualization_4.png" alt="Top Sources, Top Topics, Top Entities bar charts and AI Insight panel"></p>
+
+| Chart | Description |
+|---|---|
+| **Top Sources by Sentiment** | Horizontal stacked bar chart of the top 10 news sources, coloured by sentiment |
+| **Top Topics by Sentiment** | Horizontal stacked bar showing sentiment distribution per news topic category |
+| **Top Entities by Sentiment** | Horizontal stacked bar of the top 10 named entities, coloured by sentiment |
+
+---
 
 ### 4. AI-Generated Insight
 
-Below the charts, an **AI Insight** panel streams a narrative analysis generated by Gemini, covering:
-- Source analysis — which sources drive positive vs. negative coverage and why
-- Entity analysis — which named entities appear most and in what context
-- Topic analysis — which news topics dominate and their sentiment patterns
+
+An **AI Insight Summarization** panel streams a narrative analysis generated by Gemini directly below the charts. The insight is structured into three sections:
+
+<p align="center"><img src="images/visualization_5.png" alt="AI Insight Summarization"></p>
+
+- **Source analysis** — which sources drive positive vs. negative coverage and the key themes per source
+- **Entity analysis** — which named entities appear most and in what sentiment context
+- **Topic analysis** — which news topics dominate and their overall sentiment patterns
+
+---
+
+### 5. Recent News Content Table
+
+A filterable article list at the bottom of the page shows every scraped article for the selected keyword. Users can filter by:
+
+<p align="center"><img src="images/visualization_6.png" alt="Recent News content table with filters and Download Excel button"></p>
+
+- **Source** — filter to a specific news outlet
+- **Topic** — filter by AI-assigned topic category
+- **Entity** — filter to articles mentioning a specific named entity
+- **Sentiment** — show only positive, neutral, or negative articles
+
+Each row shows the article headline (linked to the original source), publication source, timestamp, topic tag, entity tags, and sentiment label. A **Download Excel** button exports the full filtered dataset.
 
 
-## How to Use the Apps
+## How to Use the Dasboard
 
 ### Step 1 — Open the application
 
@@ -204,7 +216,7 @@ Navigate to `http://127.0.0.1:5000` (local) in a web browser.
 
 Use the **keyword dropdown** at the top of the page to choose the topic you want to monitor. The dashboard will immediately populate with pre-loaded data for that keyword.
 
-### Step 3 — (Optional) Run a fresh analysis
+### Step 3 — Run a fresh analysis
 
 To scrape and analyse the latest news:
 
@@ -221,4 +233,27 @@ Scroll through the dashboard to explore all chart sections. Most charts are inte
 
 Scroll to the **AI Insight** section at the bottom. The narrative will stream in automatically, providing a written summary of source, entity, and topic patterns for the selected keyword.
 
-> **Note:** If either parameter is outside the valid range, no prediction will be generated for that row.
+### Step 6 — Read the news in detail and download
+
+Scroll to the **Recent News** section at the bottom of the dashboard to browse the full list of scraped articles for the selected keyword.
+
+**Filtering articles:**
+
+Use the filter bar above the table to narrow down results:
+
+| Filter | Description |
+|---|---|
+| **Filter by Source** | Show only articles from a specific news outlet |
+| **Filter by Topic** | Show only articles under a specific AI-assigned topic |
+| **Filter by Entity** | Show only articles that mention a specific named entity |
+| **Filter by Sentiment** | Show only positive, neutral, or negative articles |
+
+Filters can be combined — for example, show only *negative* articles from *HarianBasis* about *ekonomi dan keuangan*.
+
+**Reading an article:**
+
+Click any article headline in the table to open the original article in a new browser tab.
+
+**Downloading the dataset:**
+
+Click the **Download Excel** button (top-right of the table) to export all currently-displayed articles — respecting any active filters — as a `.xlsx` file. The file includes the headline, source, publication date, topic, entities, sentiment, and article URL for each row.
