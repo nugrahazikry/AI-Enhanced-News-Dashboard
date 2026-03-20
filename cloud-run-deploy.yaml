@@ -1,0 +1,87 @@
+# cloud-run-deploy.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# Deploys the news-monitoring app to Cloud Run as a multi-container service:
+#   • frontend  – Nginx (ingress, port 80)  →  receives all external traffic
+#   • backend   – Flask (sidecar, port 5000) →  reachable via localhost only
+#
+# ⚠️  BEFORE DEPLOYING: update nginx.conf proxy_pass to use localhost
+#     Change:  proxy_pass http://backend:5000;
+#     To:      proxy_pass http://localhost:5000;
+#     Then rebuild and push both images to Artifact Registry.
+#
+# Deploy command:
+#   gcloud run services replace cloud-run-deploy.yaml --region asia-southeast2
+#
+# Allow public access (run once after first deploy):
+#   gcloud run services add-iam-policy-binding news-monitoring-prod-v1 \
+#     --region asia-southeast2 \
+#     --member="allUsers" \
+#     --role="roles/run.invoker"
+#
+# Secrets setup (run once):
+#   gcloud secrets create GEN_AI_API_KEY --replication-policy="automatic"
+#   echo -n "YOUR_API_KEY" | gcloud secrets versions add GEN_AI_API_KEY --data-file=-
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+
+metadata:
+  name: news-monitoring-prod-v1
+  labels:
+    cloud.googleapis.com/location: asia-southeast2
+
+spec:
+  template:
+    metadata:
+      annotations:
+        # Use 2nd-generation execution environment (required for multi-container)
+        run.googleapis.com/execution-environment: gen2
+
+        # Uncomment to keep CPU always allocated (eliminates cold-start lag):
+        # run.googleapis.com/cpu-throttling: "false"
+
+    spec:
+      # Maximum time a request can take before Cloud Run times out
+      timeoutSeconds: 600
+
+      containers:
+        # ── Ingress container: Nginx ──────────────────────────────────────────
+        # Receives all external HTTP traffic and:
+        #   - Serves /static/* directly from disk
+        #   - Proxies everything else (pages + API) to localhost:5000 (backend)
+        - name: frontend
+          image: asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-frontend:latest
+          ports:
+            - name: http1
+              containerPort: 80
+          resources:
+            limits:
+              cpu: "1"
+              memory: 256Mi
+
+        # ── Sidecar container: Flask backend ─────────────────────────────────
+        # Runs on localhost:5000, not exposed externally.
+        # Communicates with the frontend container via localhost (shared network).
+        - name: backend
+          image: asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-backend:latest
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            # GEN_AI_API_KEY is loaded from Secret Manager.
+            # Make sure the secret exists before deploying (see setup instructions above).
+            - name: GEN_AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: GEN_AI_API_KEY   # Secret Manager secret name
+                  key: latest
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          startupProbe:
+            tcpSocket:
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12   # allow up to ~60 s for Flask to start

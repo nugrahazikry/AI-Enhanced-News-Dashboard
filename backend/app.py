@@ -27,7 +27,7 @@ app = Flask(
     static_url_path='/static',
 )
 
-genai.configure(api_key=os.getenv('GEN_AI_API_KEY'))
+genai.configure(api_key=os.getenv('GEN_AI_API_KEY'), transport='rest')
 _model_generative = genai.GenerativeModel(model_name='gemini-2.5-flash-lite')
 
 # Data source — defaults to the enriched file; switches to scraped file after Run Analysis
