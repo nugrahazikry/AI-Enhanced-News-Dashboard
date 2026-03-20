@@ -601,6 +601,37 @@ def run_processing_pipeline(df, model_generative, language='id', progress_cb=Non
     }
     # Map Indonesian labels + common AI-generated variants → canonical English
     _TOPIC_MAP = {
+        # ── Indonesian labels (from the ID-language AI prompt) ───────────
+        'ekonomi dan keuangan':          'economy and finance',
+        'bisnis dan industri':           'business and industry',
+        'politik dan pemerintahan':      'politics and government',
+        'hukum dan kriminal':            'law and crime',
+        'infrastruktur dan transportasi':'infrastructure and transportation',
+        'energi dan lingkungan':         'energy and environment',
+        'teknologi dan inovasi':         'technology and innovation',
+        'sosial dan kesejahteraan':      'social and welfare',
+        'lifestyle dan olahraga':        'lifestyle and sports',
+        # common AI short-forms in Indonesian
+        'ekonomi':                       'economy and finance',
+        'keuangan':                      'economy and finance',
+        'bisnis':                        'business and industry',
+        'industri':                      'business and industry',
+        'politik':                       'politics and government',
+        'pemerintahan':                  'politics and government',
+        'hukum':                         'law and crime',
+        'kriminal':                      'law and crime',
+        'infrastruktur':                 'infrastructure and transportation',
+        'transportasi':                  'infrastructure and transportation',
+        'energi':                        'energy and environment',
+        'lingkungan':                    'energy and environment',
+        'teknologi':                     'technology and innovation',
+        'inovasi':                       'technology and innovation',
+        'sosial':                        'social and welfare',
+        'kesejahteraan':                 'social and welfare',
+        'olahraga':                      'lifestyle and sports',
+        'hiburan':                       'lifestyle and sports',
+        'gaya hidup':                    'lifestyle and sports',
+
         # English variant → canonical
         'economics and finance': 'economy and finance',
         'finance and economy': 'economy and finance',

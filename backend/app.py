@@ -17,7 +17,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'scripts'))
 from ai_generate_insight import generate_insight
 from data_processing import run_processing_pipeline
 
-app = Flask(__name__)
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_FRONTEND_DIR = os.path.join(_BASE_DIR, '..', 'frontend')
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(_FRONTEND_DIR, 'templates'),
+    static_folder=os.path.join(_FRONTEND_DIR, 'static'),
+    static_url_path='/static',
+)
 
 genai.configure(api_key=os.getenv('GEN_AI_API_KEY'))
 _model_generative = genai.GenerativeModel(model_name='gemini-2.5-flash-lite')
@@ -511,34 +519,58 @@ def download_excel(keyword):
     subset_df = data[data['keyword'] == keyword]
     hashable_cols = [c for c in subset_df.columns if not subset_df[c].apply(lambda x: isinstance(x, (list, dict, np.ndarray))).any()]
     export_df = subset_df.drop_duplicates(subset=hashable_cols).reset_index(drop=True)
+
+    # Normalise date column name (scraped data uses 'last_update', file data uses 'datetime')
+    if 'datetime' not in export_df.columns:
+        for _date_candidate in ('last_update', 'date', 'published_date', 'publish_date', 'published_at'):
+            if _date_candidate in export_df.columns:
+                export_df = export_df.rename(columns={_date_candidate: 'datetime'})
+                break
+
+    # Format datetime as YYYY-MM-DD string for Excel readability
+    if 'datetime' in export_df.columns:
+        export_df['datetime'] = pd.to_datetime(export_df['datetime'], errors='coerce').dt.strftime('%Y-%m-%d')
+
     # Flatten list columns to comma-separated strings for Excel
     for col in ('NER', 'NER_normalized'):
         if col in export_df.columns:
             export_df[col] = export_df[col].apply(
                 lambda x: ', '.join(str(e) for e in x) if isinstance(x, list) else (x or '')
             )
-    buf = io.BytesIO()
 
-    # Clean up export_df
-    export_df = export_df[['datetime', 'keyword', 'headline_title',
-                           'source_news_url', 'normalized_source_news', 
-                           'topik_berita', 'NER_normalized',  
-                           'sentimen']].copy()
-    
+    # Ensure all expected columns exist with safe defaults before selecting
+    _defaults = {
+        'datetime':               pd.NaT,
+        'keyword':                '',
+        'headline_title':         '',
+        'source_news_url':        '',
+        'normalized_source_news': '',
+        'topik_berita':           '',
+        'NER_normalized':         '',
+        'sentimen':               '',
+    }
+    for col, default in _defaults.items():
+        if col not in export_df.columns:
+            export_df[col] = default
+
+    export_df = export_df[list(_defaults.keys())].copy()
     export_df = export_df.rename(columns={
         'normalized_source_news': 'source_news',
-        'topik_berita': 'news_topic',
-        'NER_normalized': 'entities',
-        'sentimen': 'sentiment'
+        'topik_berita':           'news_topic',
+        'NER_normalized':         'entities',
+        'sentimen':               'sentiment',
     })
 
+    buf = io.BytesIO()
     export_df.to_excel(buf, index=False, engine='openpyxl')
     buf.seek(0)
+    from datetime import datetime as _dt
     safe_kw = keyword.replace(' ', '_').replace('/', '_').replace('\\', '_')
+    today = _dt.now().strftime('%Y%m%d')
     return send_file(
         buf,
         as_attachment=True,
-        download_name=f'{safe_kw}_news.xlsx',
+        download_name=f'{safe_kw}_news_{today}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 
@@ -553,4 +585,4 @@ def get_ai_insight(keyword):
     return jsonify({'insight': result})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=False)
