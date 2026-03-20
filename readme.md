@@ -59,7 +59,7 @@ A web app that monitors news articles for any keyword. It scrapes **Google News 
 **1. Navigate to the project directory:**
 
 ```bash
-cd path/to/prod_v1
+cd path/to/AI-Enhanced-News-Dashboard-repo
 ```
 
 **2. Create a `.env` file and add your Gemini API key:**
@@ -96,49 +96,6 @@ make up
 | `make down` | Stop and remove containers |
 | `make clean` | Full teardown (containers, images, volumes) |
 | `make logs` | Tail live logs |
-
-
-## Run Locally without Docker
-
-**Prerequisites:** Python 3.11 and a [Google AI Studio](https://aistudio.google.com/) API key.
-
-**1. Navigate to the project directory:**
-
-```bash
-cd path/to/prod_v1
-```
-
-**2. Create and activate a virtual environment:**
-
-```bash
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# macOS / Linux
-source venv/bin/activate
-```
-
-**3. Install dependencies:**
-
-```bash
-pip install -r backend/requirements.txt
-```
-
-**4. Create a `.env` file and add your Gemini API key:**
-
-```
-GEN_AI_API_KEY=your_google_ai_studio_api_key_here
-```
-
-**5. Run:**
-
-```bash
-python backend/app.py
-```
-
-**6. Open in browser:** `http://localhost:5000`
 
 
 ## Deploy to Google Cloud Run
@@ -225,15 +182,6 @@ gcloud run services describe news-monitoring-prod-v1 --region asia-southeast2 --
 ```
 
 ---
-
-### Cloud Run Reference
-
-| Resource | Value |
-|---|---|
-| GCP Project | `zikrys-project` |
-| Region | `asia-southeast2` |
-| Artifact Registry | `asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/` |
-| Cloud Run service | `news-monitoring-prod-v1` |
 
 # For User
 
