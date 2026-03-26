@@ -73,7 +73,11 @@ Refreshing the page always resets the dashboard to the default pre-loaded datase
 
 ### 3. Choose Keyword (Pre-loaded Data)
 
-At the bottom of the sidebar is a **Choose Keyword** dropdown. This lets you switch between keywords that are already present in the pre-loaded dataset files stored on the server — without needing to run a new scrape.
+At the bottom of the sidebar is a **Choose Keyword** dropdown. 
+
+<p align="center"><img src="images/visualization_keyword.png" alt="Keyword Visualization"></p>
+
+This lets you switch between keywords that are already present in the pre-loaded dataset files stored on the server — without needing to run a new scrape.
 
 - Selecting a keyword from the dropdown immediately reloads all charts and the news table with data for that keyword.
 - This is useful for quickly comparing multiple keywords that have already been scraped and processed.
@@ -320,20 +324,20 @@ GEN_AI_API_KEY=your_google_ai_studio_api_key_here
 
 | Category | File | Description |
 |---|---|---|
-| API Server | `backend/app.py` | Flask application with all REST API endpoints; handles session-based authentication, data loading (Excel/Parquet), chart data aggregation, SSE-streamed AI insight, and Excel export |
-| News Scraper | `backend/scripts/google_news_scraper.py` | Scrapes Google News RSS feed with a day-by-day loop to maximise article yield; returns a DataFrame of headlines, sources, URLs, and timestamps |
-| AI Pipeline | `backend/scripts/data_processing.py` | Sends article headlines to Gemini in concurrent batches; enriches each article with sentiment (positive / neutral / negative), named entities (NER), and a topic category |
-| AI Insight | `backend/scripts/ai_generate_insight.py` | Builds structured prompts from aggregated source, entity, and topic data using real article samples, then streams a narrative Gemini-generated analysis panel |
+| API Server | `app.py` | Flask application with all REST API endpoints; handles session-based authentication, data loading (Excel/Parquet), chart data aggregation, SSE-streamed AI insight, and Excel export |
+| News Scraper | `scripts/google_news_scraper.py` | Scrapes Google News RSS feed with a day-by-day loop to maximise article yield; returns a DataFrame of headlines, sources, URLs, and timestamps |
+| AI Pipeline | `scripts/data_processing.py` | Sends article headlines to Gemini in concurrent batches; enriches each article with sentiment (positive / neutral / negative), named entities (NER), and a topic category |
+| AI Insight | `scripts/ai_generate_insight.py` | Builds structured prompts from aggregated source, entity, and topic data using real article samples, then streams a narrative Gemini-generated analysis panel |
 
 ### Key Frontend files
 
 | Category | File | Description |
 |---|---|---|
-| HTML Template | `frontend/templates/index.html` | Main single-page dashboard; defines the sidebar controls, KPI cards, Plotly chart containers, streaming AI insight panel, and filterable news table |
-| HTML Template | `frontend/templates/login.html` | Login page with username and password form used for session-based authentication |
-| JavaScript | `frontend/static/js/main.js` | All client-side logic: fetches API endpoints, renders Plotly charts, manages table filters, handles login/logout flow, streams the AI insight via SSE, and triggers Excel download |
-| CSS | `frontend/static/css/style.css` | Dashboard layout, component styling, responsive design, and colour themes for sentiment labels and chart elements |
-| Reverse Proxy | `frontend/nginx.conf` | Serves `/static/` files directly from disk; proxies all other requests (API calls, template rendering) to the Flask backend |
+| HTML Template | `templates/index.html` | Main single-page dashboard; defines the sidebar controls, KPI cards, Plotly chart containers, streaming AI insight panel, and filterable news table |
+| HTML Template | `templates/login.html` | Login page with username and password form used for session-based authentication |
+| JavaScript | `static/js/main.js` | All client-side logic: fetches API endpoints, renders Plotly charts, manages table filters, handles login/logout flow, streams the AI insight via SSE, and triggers Excel download |
+| CSS | `static/css/style.css` | Dashboard layout, component styling, responsive design, and colour themes for sentiment labels and chart elements |
+| Reverse Proxy | `nginx.conf` | Serves `/static/` files directly from disk; proxies all other requests (API calls, template rendering) to the Flask backend |
 
 
 ## Run the project with Docker (Local)
@@ -475,11 +479,3 @@ Contributors names and contact info:
 ## License
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
-```
-MIT License
-
-Copyright (c) 2025 Zikry Adjie Nugraha
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software...
-```
