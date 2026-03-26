@@ -416,58 +416,58 @@ gcloud run services add-iam-policy-binding news-monitoring-prod-v1 `
 
 ### Deploy / Redeploy Steps
 
-**Step 1 — Set the API key as a Cloud Run environment variable**
-
-In the Cloud Run console, go to your service → **Edit & Deploy New Revision** → **Variables & Secrets** tab, and add:
-
-```
-GEN_AI_API_KEY = your_google_ai_studio_api_key_here
-```
-
-Or via CLI:
+**Step 1 — Authenticate with Google Cloud**
 
 ```powershell
-gcloud run services update news-monitoring-prod-v1 `
-  --region asia-southeast2 `
-  --update-env-vars GEN_AI_API_KEY="YOUR_ACTUAL_API_KEY"
+gcloud auth login
 ```
 
-> This only needs to be done once, or whenever you rotate the key.
-
-**Step 2 — Switch `nginx.conf` to Cloud Run mode**
-
-In `frontend/nginx.conf`, make sure it looks like this:
-
-```nginx
-proxy_pass http://localhost:5000;    # for Cloud Run
-# proxy_pass http://backend:5000;   # for Docker Compose (local)
-```
-
-**Step 3 — Build images**
+**Step 2 — Set the active project**
 
 ```powershell
-docker build -f backend/Dockerfile  -t asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-backend:latest  .
-docker build -f frontend/Dockerfile -t asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-frontend:latest .
+gcloud config set project <project-id>
 ```
 
-**Step 4 — Push to Artifact Registry**
+> Replace `<project-id>` with your GCP project ID (e.g. `my-gcp-project`).
+
+**Step 3 — Enable Artifact Registry**
 
 ```powershell
-docker push asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-backend:latest
-docker push asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-frontend:latest
+gcloud services enable artifactregistry.googleapis.com
 ```
 
-**Step 5 — Deploy**
+**Step 4 — Tag the images for Artifact Registry**
 
 ```powershell
-gcloud run services replace cloud-run-deploy.yaml --region asia-southeast2
+docker tag <image-name>-backend:latest  <region>-docker.pkg.dev/<project-id>/<repo-name>/<image-name>-backend:latest
+docker tag <image-name>-frontend:latest <region>-docker.pkg.dev/<project-id>/<repo-name>/<image-name>-frontend:latest
 ```
 
-**Step 6 — Get the live URL**
+> Replace `<region>`, `<project-id>`, `<repo-name>`, and `<image-name>` with your actual values.
+
+**Step 5 — Push images to Artifact Registry**
 
 ```powershell
-gcloud run services describe news-monitoring-prod-v1 --region asia-southeast2 --format="value(status.url)"
+docker push <region>-docker.pkg.dev/<project-id>/<repo-name>/<image-name>-backend:latest
+docker push <region>-docker.pkg.dev/<project-id>/<repo-name>/<image-name>-frontend:latest
 ```
+
+**Step 6 — Deploy to Cloud Run**
+
+```powershell
+gcloud run services replace cloud-run-deploy.yaml --region <region>
+```
+
+**Step 7 — Allow public access**
+
+```powershell
+gcloud run services add-iam-policy-binding <service-name> `
+  --region <region> `
+  --member="allUsers" `
+  --role="roles/run.invoker"
+```
+
+> Replace `<service-name>` with your Cloud Run service name.
 
 ---
 

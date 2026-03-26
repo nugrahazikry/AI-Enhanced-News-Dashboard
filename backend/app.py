@@ -35,7 +35,7 @@ _model_generative = genai.GenerativeModel(model_name='gemini-2.5-flash-lite')
 # ── Auth ─────────────────────────────────────────────────────────────────────
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'news-monitor-secret-2026')
 _USER_STORE = {
-    'player_zero': generate_password_hash('player123321')
+    'player_zero': generate_password_hash(os.getenv('PASSWORD'))
 }
 
 def login_required(f):
