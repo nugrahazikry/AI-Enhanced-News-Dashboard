@@ -23,7 +23,7 @@ A web app that monitors news articles for any keyword. It scrapes **Google News 
   - [License](#license)
 
 
-# For Users
+# For Users 
 
 ## Application Demo
 
