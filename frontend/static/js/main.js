@@ -104,6 +104,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const runBtn = document.getElementById('scraper-run-btn');
     if (runBtn) {
         runBtn.addEventListener('click', () => {
+            // Require login before running analysis
+            if (!window.isLoggedIn) {
+                if (typeof openMustLoginPopup === 'function') openMustLoginPopup();
+                return;
+            }
+
             const keyword   = document.getElementById('scraper-keyword').value.trim();
             const startDate = startDateInput ? startDateInput.value : '';
             const endDate   = endDateInput   ? endDateInput.value   : '';
@@ -184,6 +190,16 @@ document.addEventListener('DOMContentLoaded', function() {
         downloadBtn.addEventListener('click', () => {
             const kw = window._currentKeyword || defaultKeyword;
             if (kw) window.location.href = `/api/download/${encodeURIComponent(kw)}`;
+        });
+    }
+
+    // ── Choose Keyword dropdown ────────────────────────────────────────────
+    const keywordSelect = document.getElementById('keyword-select');
+
+    if (keywordSelect) {
+        keywordSelect.addEventListener('change', () => {
+            const kw = keywordSelect.value;
+            if (kw) loadDashboardData(kw);
         });
     }
 

@@ -1,4 +1,6 @@
-from flask import Flask, render_template, jsonify, request, Response, stream_with_context, send_file
+from flask import Flask, render_template, jsonify, request, Response, stream_with_context, send_file, session, redirect, url_for
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 import json
 import io
 import threading
@@ -30,6 +32,22 @@ app = Flask(
 genai.configure(api_key=os.getenv('GEN_AI_API_KEY'), transport='rest')
 _model_generative = genai.GenerativeModel(model_name='gemini-2.5-flash-lite')
 
+# ── Auth ─────────────────────────────────────────────────────────────────────
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'news-monitor-secret-2026')
+_USER_STORE = {
+    'player_zero': generate_password_hash('player123321')
+}
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('username'):
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Unauthorized'}), 401
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
 # Data source — defaults to the enriched file; switches to scraped file after Run Analysis
 _DEFAULT_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'makan_bergizi_gratis_news.xlsx')
 _active_data_path = _DEFAULT_DATA_FILE
@@ -42,9 +60,29 @@ def load_data():
     if os.path.exists(parquet_path):
         df = pd.read_parquet(parquet_path)
     elif path.lower().endswith(('.xlsx', '.xls')):
-        df = pd.read_excel(path)
+        # Try known sheet names, fall back to first sheet
+        df = None
+        for _sheet in ('News', 'News Data'):
+            try:
+                df = pd.read_excel(path, sheet_name=_sheet)
+                break
+            except Exception:
+                pass
+        if df is None:
+            df = pd.read_excel(path)
     else:
         df = pd.read_parquet(path)
+
+    # ── Column alias normalisation (handles both raw and export formats) ──────
+    # Map export-format column names → internal names used by the rest of the app
+    _col_aliases = {
+        'sentiment':  'sentimen',     # export: English column name
+        'news_topic': 'topik_berita', # export: topic column
+        'entities':   'NER_normalized', # export: entity column
+    }
+    for export_col, internal_col in _col_aliases.items():
+        if export_col in df.columns and internal_col not in df.columns:
+            df = df.rename(columns={export_col: internal_col})
 
     # Normalise date column → always 'datetime'
     for candidate in ('datetime', 'last_update', 'date', 'published_date', 'publish_date', 'published_at', 'created_at'):
@@ -80,6 +118,7 @@ def load_data():
         df['sentimen'] = 'neutral'
     if 'topik_berita' not in df.columns:
         df['topik_berita'] = 'Tidak Dikategorikan'
+    # Export format uses 'source_news' (already normalised); raw format has 'normalized_source_news'
     if 'normalized_source_news' not in df.columns:
         df['normalized_source_news'] = df['source_news'] if 'source_news' in df.columns else ''
     if 'source_news_url' not in df.columns:
@@ -105,23 +144,94 @@ def load_data():
 
 # Cache the data
 _cached_data = None
+_cached_insights = {}  # keyword -> insight text (markdown)
+
+
+def _load_insight_from_excel(path):
+    """Read the 'AI Insight' sheet from an Excel file and reconstruct markdown text.
+    Returns the markdown string, or None if the sheet doesn't exist."""
+    if not path.lower().endswith(('.xlsx', '.xls')):
+        return None
+    try:
+        df_ins = pd.read_excel(path, sheet_name='AI Insight')
+        if df_ins.empty:
+            return None
+        # Each row is one line of the original markdown; rejoin them
+        col = df_ins.columns[0]
+        lines = df_ins[col].fillna('').astype(str).tolist()
+        return '\n'.join(lines)
+    except Exception:
+        return None
+
 
 def get_data():
-    global _cached_data
+    global _cached_data, _cached_insights
     if _cached_data is None:
         _cached_data = load_data()
+        # Auto-populate insight cache from the Excel 'AI Insight' sheet
+        insight_text = _load_insight_from_excel(_active_data_path)
+        if insight_text:
+            if 'keyword' in _cached_data.columns:
+                for kw in _cached_data['keyword'].dropna().unique():
+                    _cached_insights.setdefault(kw, insight_text)
     return _cached_data
+
+def _switch_to_file_for_keyword(keyword):
+    """Switch the active dataset to whichever file contains the given keyword.
+    Returns True if the file was switched, False if already correct or not found."""
+    global _cached_data, _cached_insights, _active_data_path
+    data = get_data()
+    if 'keyword' in data.columns and keyword in data['keyword'].values:
+        return False  # already loaded
+    for fname in sorted(os.listdir(_DATA_DIR)):
+        if fname.startswith('~$'):
+            continue
+        _, ext = os.path.splitext(fname)
+        if ext.lower() not in _ALLOWED_EXTENSIONS:
+            continue
+        fpath = os.path.join(_DATA_DIR, fname)
+        if keyword in _read_keywords_from_file(fpath):
+            _active_data_path = fpath
+            _cached_data = None
+            _cached_insights = {}
+            get_data()  # pre-load
+            return True
+    return False
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json(silent=True) or {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    hashed = _USER_STORE.get(username)
+    if hashed and check_password_hash(hashed, password):
+        session['username'] = username
+        return jsonify({'ok': True, 'username': username})
+    return jsonify({'ok': False, 'error': 'Invalid username or password.'}), 401
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return jsonify({'ok': True})
 
 @app.route('/')
 def index():
+    global _cached_data, _active_data_path
+    # Always reload from the default file on every page visit so that
+    # in-memory scraped data from a previous Run Analysis is discarded.
+    _active_data_path = _DEFAULT_DATA_FILE
+    _cached_data = None
+    keywords = _collect_all_keywords()
     data = get_data()
-    keywords = sorted(data['keyword'].dropna().unique().tolist())
-    # Default to 'Pertamina' if available, else first keyword
-    default_keyword = 'Pertamina' if 'Pertamina' in keywords else keywords[0] if keywords else ''
-    return render_template('index.html', keywords=keywords, default_keyword=default_keyword)
+    current_kws = sorted(data['keyword'].dropna().unique().tolist()) if 'keyword' in data.columns else []
+    default_keyword = current_kws[0] if current_kws else (keywords[0] if keywords else '')
+    return render_template('index.html', keywords=keywords, default_keyword=default_keyword, username='')
 
 @app.route('/api/data/<keyword>')
 def get_keyword_data(keyword):
+    global _cached_data, _cached_insights, _active_data_path
+    _switch_to_file_for_keyword(keyword)
     data = get_data()
     
     # Filter by keyword
@@ -191,7 +301,7 @@ def get_keyword_data(keyword):
         entitas_df = filtered_df[['entitas', 'sentimen']].copy()
         entitas_df["entitas"] = entitas_df["entitas"].str.lower().str.split(", ")
         entitas_df = entitas_df.explode("entitas").reset_index(drop=True)
-        entitas_df = entitas_df[~entitas_df['entitas'].isin(['tidak ada', keyword.lower(), ''])]
+        entitas_df = entitas_df[~entitas_df['entitas'].isin(['tidak ada', ''])]
         entitas_df = entitas_df.dropna(subset=['entitas'])
         entitas_counts = entitas_df.groupby(["entitas", "sentimen"]).size().reset_index(name="count")
         top_entitas = entitas_counts.groupby("entitas")["count"].sum().nlargest(10).index.tolist()
@@ -374,7 +484,7 @@ def get_keyword_data(keyword):
         ent_sov_df = filtered_df[['entitas']].copy()
         ent_sov_df['entitas'] = ent_sov_df['entitas'].str.lower().str.split(', ')
         ent_sov_df = ent_sov_df.explode('entitas').reset_index(drop=True)
-        ent_sov_df = ent_sov_df[~ent_sov_df['entitas'].isin(['tidak ada', keyword.lower(), ''])]
+        ent_sov_df = ent_sov_df[~ent_sov_df['entitas'].isin(['tidak ada', ''])]
         entity_sov_series = ent_sov_df['entitas'].value_counts()
         entity_sov = [{'entity': ent, 'count': int(cnt)} for ent, cnt in entity_sov_series.items()]
     else:
@@ -414,6 +524,8 @@ def get_keyword_data(keyword):
 
 @app.route('/api/news/<keyword>')
 def get_news_list(keyword):
+    global _cached_data, _cached_insights, _active_data_path
+    _switch_to_file_for_keyword(keyword)
     data = get_data()
     subset_df = data[data['keyword'] == keyword]
     hashable_cols = [c for c in subset_df.columns if not subset_df[c].apply(lambda x: isinstance(x, (list, dict, np.ndarray))).any()]
@@ -561,8 +673,22 @@ def download_excel(keyword):
         'sentimen':               'sentiment',
     })
 
+    # Use cached insight if already generated; otherwise generate now
+    if keyword in _cached_insights:
+        insight_text = _cached_insights[keyword]
+    else:
+        try:
+            insight_text = generate_insight(subset_df, _model_generative, language=_active_language)
+            _cached_insights[keyword] = insight_text
+        except Exception:
+            insight_text = 'AI insight could not be generated.'
+
     buf = io.BytesIO()
-    export_df.to_excel(buf, index=False, engine='openpyxl')
+    with pd.ExcelWriter(buf, engine='openpyxl') as writer:
+        export_df.to_excel(writer, sheet_name='News Data', index=False)
+        insight_lines = insight_text.split('\n')
+        insight_df = pd.DataFrame(insight_lines, columns=['AI Insight'])
+        insight_df.to_excel(writer, sheet_name='AI Insight', index=False)
     buf.seek(0)
     from datetime import datetime as _dt
     safe_kw = keyword.replace(' ', '_').replace('/', '_').replace('\\', '_')
@@ -575,13 +701,115 @@ def download_excel(keyword):
     )
 
 
+_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+_ALLOWED_EXTENSIONS = {'.xlsx', '.xls', '.parquet'}
+
+
+def _read_keywords_from_file(fpath):
+    """Read only the keyword column from a dataset file. Returns a set."""
+    _, ext = os.path.splitext(fpath)
+    try:
+        parquet_path = os.path.splitext(fpath)[0] + '.parquet'
+        if os.path.exists(parquet_path):
+            df_kw = pd.read_parquet(parquet_path, columns=['keyword'])
+        elif ext.lower() in ('.xlsx', '.xls'):
+            df_kw = None
+            for _sheet in ('News', 'News Data'):
+                try:
+                    df_kw = pd.read_excel(fpath, sheet_name=_sheet, usecols=['keyword'])
+                    break
+                except Exception:
+                    pass
+            if df_kw is None:
+                df_kw = pd.read_excel(fpath, usecols=['keyword'])
+        else:
+            df_kw = pd.read_parquet(fpath, columns=['keyword'])
+        if 'keyword' in df_kw.columns:
+            return set(df_kw['keyword'].dropna().unique().tolist())
+    except Exception:
+        pass
+    return set()
+
+
+def _collect_all_keywords():
+    """Return a sorted list of unique keywords across all dataset files in data/."""
+    all_kws = set()
+    for fname in sorted(os.listdir(_DATA_DIR)):
+        if fname.startswith('~$'):
+            continue
+        _, ext = os.path.splitext(fname)
+        if ext.lower() not in _ALLOWED_EXTENSIONS:
+            continue
+        all_kws.update(_read_keywords_from_file(os.path.join(_DATA_DIR, fname)))
+    return sorted(all_kws)
+
+
+@app.route('/api/list_files')
+def list_data_files():
+    """Return all dataset files available in the data/ folder."""
+    files = []
+    for fname in sorted(os.listdir(_DATA_DIR)):
+        if fname.startswith('~$'):          # skip Excel lock files
+            continue
+        _, ext = os.path.splitext(fname)
+        if ext.lower() in _ALLOWED_EXTENSIONS:
+            files.append(fname)
+    return jsonify({'files': files})
+
+
+@app.route('/api/load_file', methods=['POST'])
+def load_file():
+    """Switch the active dataset to a file chosen by the user."""
+    global _cached_data, _cached_insights, _active_data_path
+    body = request.get_json(silent=True) or {}
+    filename = body.get('filename', '').strip()
+
+    # Security: reject empty names, path separators, and non-allowed extensions
+    if not filename or os.sep in filename or '/' in filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    _, ext = os.path.splitext(filename)
+    if ext.lower() not in _ALLOWED_EXTENSIONS:
+        return jsonify({'error': 'Unsupported file type'}), 400
+
+    full_path = os.path.join(_DATA_DIR, filename)
+    if not os.path.isfile(full_path):
+        return jsonify({'error': 'File not found'}), 404
+
+    _active_data_path = full_path
+    _cached_data = None
+    _cached_insights = {}
+
+    data = get_data()
+    keywords = sorted(data['keyword'].dropna().unique().tolist()) if 'keyword' in data.columns else []
+    return jsonify({'keywords': keywords})
+
+
+@app.route('/api/set_keyword/<keyword>')
+def set_keyword(keyword):
+    """Ensure the active dataset contains the given keyword, switching files if needed."""
+    try:
+        _switch_to_file_for_keyword(keyword)
+        data = get_data()
+        if 'keyword' not in data.columns or keyword not in data['keyword'].values:
+            return jsonify({'error': f'Keyword "{keyword}" not found in any dataset'}), 404
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/ai_insight/<keyword>')
 def get_ai_insight(keyword):
+    global _cached_insights
+    _switch_to_file_for_keyword(keyword)
+    # Serve from cache immediately if available (pre-loaded from Excel sheet)
+    if keyword in _cached_insights:
+        return jsonify({'insight': _cached_insights[keyword]})
     data = get_data()
     filtered_df = data[data['keyword'] == keyword].copy()
     if filtered_df.empty:
         return jsonify({'error': 'No data found for keyword'}), 404
     result = generate_insight(filtered_df, _model_generative, language=_active_language)
+    _cached_insights[keyword] = result
     return jsonify({'insight': result})
 
 if __name__ == '__main__':
