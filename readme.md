@@ -35,7 +35,7 @@ The deployed application is in this link:
 
 The application consists of six main areas accessible from a single-page dashboard.
 
-<p align="center"><img src="images/main_visualization.png" alt="Main Visualization"></p>
+<p align="center"><img src="images/main_visualizatio.png"></p>
 
 ---
 
