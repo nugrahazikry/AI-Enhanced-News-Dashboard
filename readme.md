@@ -2,202 +2,34 @@
 
 A web app that monitors news articles for any keyword. It scrapes **Google News RSS**, uses **Google Gemini AI** to classify sentiment, extract named entities, and assign topics — then displays everything in an interactive dashboard with charts and an AI-generated narrative summary.
 
+![Python Version](https://img.shields.io/badge/python-3.11-blue)
+![Docker](https://img.shields.io/badge/docker-supported-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 
-# Table of Contents
+# Table of content
 
-- [For Developers](#for-developer)
-  - [Project Structure](#project-structure)
-  - [Run with Docker (Local)](#run-with-docker-local)
-  - [Run Locally without Docker](#run-locally-without-docker)
-  - [Deploy to Google Cloud Run](#deploy-to-google-cloud-run)
-- [For Users](#for-user)
+- [For Users](#for-users)
+  - [Application Demo](#application-demo)
   - [Apps Features](#apps-features)
-    - [1. Login / Logout](#1-login--logout)
-    - [2. Keyword Selector & Run Analysis](#2-keyword-selector--run-analysis)
-    - [3. Choose Keyword (Pre-loaded Data)](#3-choose-keyword-pre-loaded-data)
-    - [4. Summary KPI Cards](#4-summary-kpi-cards)
-    - [5. Interactive Charts](#5-interactive-charts)
-    - [6. AI-Generated Insight](#6-ai-generated-insight)
-    - [7. Recent News Content Table](#7-recent-news-content-table)
   - [How to Use the Dashboard](#how-to-use-the-dashboard)
-    - [Step 1 — Open the application](#step-1--open-the-application)
-    - [Step 2 — Log in](#step-2--log-in)
-    - [Step 3 — Select a keyword from pre-loaded data](#step-3--select-a-keyword-from-pre-loaded-data)
-    - [Step 4 — Run a fresh analysis](#step-4--run-a-fresh-analysis)
-    - [Step 5 — Explore the charts](#step-5--explore-the-charts)
-    - [Step 6 — Read the AI Insight](#step-6--read-the-ai-insight)
-    - [Step 7 — Read the news in detail and download](#step-7--read-the-news-in-detail-and-download)
+- [For Developers](#for-developers)
+  - [Project Structure](#project-structure)
+  - [Getting Started](#getting-started)
+  - [Code Explanation](#code-explanation)
+  - [Run the project with Docker (Local)](#run-the-project-with-docker-local)
+  - [Deploy to Google Cloud Run](#deploy-to-google-cloud-run)
+  - [Contributors](#contributors)
+  - [License](#license)
 
 
-# For Developer
+# For Users
 
-## Project Structure
+## Application Demo
 
-```
-.
-├── docker-compose.yml          # Runs frontend + backend containers locally
-├── cloud-run-deploy.yaml       # Cloud Run multi-container deployment manifest
-├── Makefile                    # Shortcuts for Docker operations
-├── readme.md
-├── .env                        # Your API keys — not committed to git
-├── .gitignore
-├── .dockerignore
-│
-├── backend/
-│   ├── app.py                  # Flask app and API routes
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   ├── data/                   # Cached datasets (Excel / Parquet)
-│   └── scripts/
-│       ├── google_news_scraper.py   # Scrapes Google News RSS by date range
-│       ├── data_processing.py       # AI pipeline: sentiment, NER, topic
-│       └── ai_generate_insight.py   # AI narrative summary generation
-│
-├── frontend/
-│   ├── Dockerfile
-│   ├── nginx.conf              # Serves /static/, proxies everything else to Flask
-│   ├── static/
-│   │   ├── css/style.css
-│   │   └── js/main.js
-│   └── templates/
-│       └── index.html
-│
-└── images/                     # Dashboard screenshots for readme
-```
+The deployed application is in this link:
+[https://news-monitoring-prod-v1-118493320623.asia-southeast2.run.app/ *(update with the live Cloud Run URL)*](https://news-monitoring-prod-v1-118493320623.asia-southeast2.run.app/)
 
-
-## Run with Docker (Local)
-
-**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) and a [Google AI Studio](https://aistudio.google.com/) API key.
-
-**1. Navigate to the project directory:**
-
-```bash
-cd path/to/AI-Enhanced-News-Dashboard-repo
-```
-
-**2. Create a `.env` file and add your Gemini API key:**
-
-```
-GEN_AI_API_KEY=your_google_ai_studio_api_key_here
-```
-
-**3. Make sure `nginx.conf` is set for local Docker use.**
-
-In `frontend/nginx.conf`, the active `proxy_pass` line should be:
-
-```nginx
-proxy_pass http://backend:5000;   # for Docker Compose (local)
-# proxy_pass http://localhost:5000;  # for Cloud Run
-```
-
-**4. Build and start:**
-
-```bash
-make up
-```
-
-**5. Open in browser:** `http://localhost`
-
-### Makefile reference
-
-| Command | Description |
-|---|---|
-| `make build` | Build (or rebuild) images |
-| `make up` | Build and start all containers |
-| `make start` | Start already-built containers |
-| `make stop` | Stop containers |
-| `make down` | Stop and remove containers |
-| `make clean` | Full teardown (containers, images, volumes) |
-| `make logs` | Tail live logs |
-
-
-## Deploy to Google Cloud Run
-
-**Prerequisites:**
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) authenticated
-- Access to GCP project `zikrys-project`
-
----
-
-### One-Time Setup
-
-**1. Authenticate Docker with Artifact Registry:**
-
-```bash
-gcloud auth configure-docker asia-southeast2-docker.pkg.dev
-```
-
-**2. Allow public access (run once after first deploy):**
-
-```powershell
-gcloud run services add-iam-policy-binding news-monitoring-prod-v1 `
-  --region asia-southeast2 `
-  --member="allUsers" `
-  --role="roles/run.invoker"
-```
-
----
-
-### Deploy / Redeploy Steps
-
-**Step 1 — Set the API key as a Cloud Run environment variable**
-
-In the Cloud Run console, go to your service → **Edit & Deploy New Revision** → **Variables & Secrets** tab, and add:
-
-```
-GEN_AI_API_KEY = your_google_ai_studio_api_key_here
-```
-
-Or via CLI:
-
-```powershell
-gcloud run services update news-monitoring-prod-v1 `
-  --region asia-southeast2 `
-  --update-env-vars GEN_AI_API_KEY="YOUR_ACTUAL_API_KEY"
-```
-
-> This only needs to be done once, or whenever you rotate the key.
-
-**Step 2 — Switch `nginx.conf` to Cloud Run mode**
-
-In `frontend/nginx.conf`, make sure it looks like this:
-
-```nginx
-proxy_pass http://localhost:5000;    # for Cloud Run
-# proxy_pass http://backend:5000;   # for Docker Compose (local)
-```
-
-**Step 3 — Build images**
-
-```powershell
-docker build -f backend/Dockerfile  -t asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-backend:latest  .
-docker build -f frontend/Dockerfile -t asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-frontend:latest .
-```
-
-**Step 4 — Push to Artifact Registry**
-
-```powershell
-docker push asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-backend:latest
-docker push asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-frontend:latest
-```
-
-**Step 5 — Deploy**
-
-```powershell
-gcloud run services replace cloud-run-deploy.yaml --region asia-southeast2
-```
-
-**Step 6 — Get the live URL**
-
-```powershell
-gcloud run services describe news-monitoring-prod-v1 --region asia-southeast2 --format="value(status.url)"
-```
-
----
-
-# For User
 
 ## Apps Features
 
@@ -384,3 +216,270 @@ Click any article headline in the table to open the original article in a new br
 **Downloading the dataset:**
 
 Click the **Download Excel** button (top-right of the table) to export all currently-displayed articles — respecting any active filters — as a `.xlsx` file. The file includes the headline, source, publication date, topic, entities, sentiment, and article URL for each row.
+
+
+# For Developers
+
+## Project Structure
+```
+.
+├── docker-compose.yml          # Runs frontend + backend containers locally
+├── cloud-run-deploy.yaml       # Cloud Run multi-container deployment manifest
+├── Makefile                    # Shortcuts for Docker operations
+├── readme.md
+├── .env                        # Your API keys — not committed to git
+├── .gitignore
+├── .dockerignore
+│
+├── backend/
+│   ├── app.py                  # Flask app and API routes
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   ├── data/                   # Cached datasets (Excel / Parquet)
+│   └── scripts/
+│       ├── google_news_scraper.py   # Scrapes Google News RSS by date range
+│       ├── data_processing.py       # AI pipeline: sentiment, NER, topic
+│       └── ai_generate_insight.py   # AI narrative summary generation
+│
+├── frontend/
+│   ├── Dockerfile
+│   ├── nginx.conf              # Serves /static/, proxies everything else to Flask
+│   ├── static/
+│   │   ├── css/style.css
+│   │   └── js/main.js
+│   └── templates/
+│       └── index.html
+│
+└── images/                     # Dashboard screenshots for readme
+```
+
+## Getting started
+
+### Dependencies and Prerequisites
+
+| Dependency | Version | Purpose |
+|---|---|---|
+| Python | 3.11 | Runtime language |
+| Flask | 3.0.0 | Web framework and REST API server |
+| Pandas | 2.2.3 | Data loading, filtering, and aggregation |
+| NumPy | 1.26.4 | Numerical operations |
+| PyArrow | 23.0.1 | Parquet file read/write support |
+| OpenPyXL | 3.1.2 | Excel (.xlsx) file read/write |
+| google-generativeai | 0.8.3 | Google Gemini AI SDK for sentiment, NER, topic, and insight generation |
+| Requests | 2.31.0 | HTTP requests for Google News RSS scraping |
+| BeautifulSoup4 | 4.12.3 | XML/HTML parsing of RSS feed responses |
+| python-dotenv | 0.21.0 | Loading environment variables from `.env` |
+| Docker Desktop | Latest | Building and running containers locally |
+| Google Cloud CLI | Latest | Pushing images and deploying to Cloud Run |
+
+### Tech stack
+
+| Layer | Tech stack |
+|---|---|
+| AI / LLM | Google Gemini (`gemini-2.5-flash-lite`) via `google-generativeai` |
+| News Scraping | Google News RSS + Requests + BeautifulSoup4 |
+| Data Processing | Pandas, NumPy, PyArrow |
+| Frontend | HTML5, CSS3, Vanilla JavaScript, Plotly.js |
+| Reverse Proxy | Nginx |
+| Containerization | Docker, Docker Compose |
+| Cloud Platform | Google Cloud Run (multi-container) |
+| Container Registry | Google Artifact Registry |
+
+### Credentials setup
+
+This project requires API keys and environment variables. Follow these steps:
+
+1. Copy the example environment file:
+```bash
+   cp .env.example .env
+```
+
+2. Open `.env` and fill in your actual values:
+```bash
+   nano .env  # or use any text editor
+```
+
+3. Below is the full list of required variables:
+
+| Variable | Description | Required |
+|---|---|---|
+| `GEN_AI_API_KEY` | Your API key from [Google AI Studio](https://aistudio.google.com/) for Gemini AI | ✅ Yes |
+
+> ⚠️ **Never commit your `.env` file.** Make sure `.env` is listed in your `.gitignore`.
+
+**Example `.env.example` file:**
+```env
+# .env.example — copy this to .env and fill in your values
+GEN_AI_API_KEY=your_google_ai_studio_api_key_here
+```
+
+
+## Code explanation
+
+### Key Backend files
+
+| Category | File | Description |
+|---|---|---|
+| API Server | `backend/app.py` | Flask application with all REST API endpoints; handles session-based authentication, data loading (Excel/Parquet), chart data aggregation, SSE-streamed AI insight, and Excel export |
+| News Scraper | `backend/scripts/google_news_scraper.py` | Scrapes Google News RSS feed with a day-by-day loop to maximise article yield; returns a DataFrame of headlines, sources, URLs, and timestamps |
+| AI Pipeline | `backend/scripts/data_processing.py` | Sends article headlines to Gemini in concurrent batches; enriches each article with sentiment (positive / neutral / negative), named entities (NER), and a topic category |
+| AI Insight | `backend/scripts/ai_generate_insight.py` | Builds structured prompts from aggregated source, entity, and topic data using real article samples, then streams a narrative Gemini-generated analysis panel |
+
+### Key Frontend files
+
+| Category | File | Description |
+|---|---|---|
+| HTML Template | `frontend/templates/index.html` | Main single-page dashboard; defines the sidebar controls, KPI cards, Plotly chart containers, streaming AI insight panel, and filterable news table |
+| HTML Template | `frontend/templates/login.html` | Login page with username and password form used for session-based authentication |
+| JavaScript | `frontend/static/js/main.js` | All client-side logic: fetches API endpoints, renders Plotly charts, manages table filters, handles login/logout flow, streams the AI insight via SSE, and triggers Excel download |
+| CSS | `frontend/static/css/style.css` | Dashboard layout, component styling, responsive design, and colour themes for sentiment labels and chart elements |
+| Reverse Proxy | `frontend/nginx.conf` | Serves `/static/` files directly from disk; proxies all other requests (API calls, template rendering) to the Flask backend |
+
+
+## Run the project with Docker (Local)
+
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) and a [Google AI Studio](https://aistudio.google.com/) API key.
+
+**1. Navigate to the project directory:**
+
+```bash
+cd path/to/AI-Enhanced-News-Dashboard-repo
+```
+
+**2. Create a `.env` file and add your Gemini API key:**
+
+```
+GEN_AI_API_KEY=your_google_ai_studio_api_key_here
+```
+
+**3. Make sure `nginx.conf` is set for local Docker use.**
+
+In `frontend/nginx.conf`, the active `proxy_pass` line should be:
+
+```nginx
+proxy_pass http://backend:5000;   # for Docker Compose (local)
+# proxy_pass http://localhost:5000;  # for Cloud Run
+```
+
+**4. Build and start:**
+
+```bash
+make up
+```
+
+**5. Open in browser:** `http://localhost`
+
+### Makefile reference
+
+| Command | Description |
+|---|---|
+| `make build` | Build (or rebuild) images |
+| `make up` | Build and start all containers |
+| `make start` | Start already-built containers |
+| `make stop` | Stop containers |
+| `make down` | Stop and remove containers |
+| `make clean` | Full teardown (containers, images, volumes) |
+| `make logs` | Tail live logs |
+
+
+## Deploy to Google Cloud Run
+
+**Prerequisites:**
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) authenticated
+- Access to GCP project `zikrys-project`
+
+---
+
+### One-Time Setup
+
+**1. Authenticate Docker with Artifact Registry:**
+
+```bash
+gcloud auth configure-docker asia-southeast2-docker.pkg.dev
+```
+
+**2. Allow public access (run once after first deploy):**
+
+```powershell
+gcloud run services add-iam-policy-binding news-monitoring-prod-v1 `
+  --region asia-southeast2 `
+  --member="allUsers" `
+  --role="roles/run.invoker"
+```
+
+---
+
+### Deploy / Redeploy Steps
+
+**Step 1 — Set the API key as a Cloud Run environment variable**
+
+In the Cloud Run console, go to your service → **Edit & Deploy New Revision** → **Variables & Secrets** tab, and add:
+
+```
+GEN_AI_API_KEY = your_google_ai_studio_api_key_here
+```
+
+Or via CLI:
+
+```powershell
+gcloud run services update news-monitoring-prod-v1 `
+  --region asia-southeast2 `
+  --update-env-vars GEN_AI_API_KEY="YOUR_ACTUAL_API_KEY"
+```
+
+> This only needs to be done once, or whenever you rotate the key.
+
+**Step 2 — Switch `nginx.conf` to Cloud Run mode**
+
+In `frontend/nginx.conf`, make sure it looks like this:
+
+```nginx
+proxy_pass http://localhost:5000;    # for Cloud Run
+# proxy_pass http://backend:5000;   # for Docker Compose (local)
+```
+
+**Step 3 — Build images**
+
+```powershell
+docker build -f backend/Dockerfile  -t asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-backend:latest  .
+docker build -f frontend/Dockerfile -t asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-frontend:latest .
+```
+
+**Step 4 — Push to Artifact Registry**
+
+```powershell
+docker push asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-backend:latest
+docker push asia-southeast2-docker.pkg.dev/zikrys-project/news-monitoring-repo/news-monitoring-prod_v1-frontend:latest
+```
+
+**Step 5 — Deploy**
+
+```powershell
+gcloud run services replace cloud-run-deploy.yaml --region asia-southeast2
+```
+
+**Step 6 — Get the live URL**
+
+```powershell
+gcloud run services describe news-monitoring-prod-v1 --region asia-southeast2 --format="value(status.url)"
+```
+
+---
+
+## Contributors
+Contributors names and contact info:
+1. **[Zikry Adjie Nugraha](https://github.com/nugrahazikry)**: Sole developer — designed and built the full application including the Google News RSS scraper, Gemini AI enrichment pipeline, Flask REST API, interactive Plotly dashboard, Docker multi-container setup, and Google Cloud Run deployment.
+
+
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+```
+MIT License
+
+Copyright (c) 2025 Zikry Adjie Nugraha
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software...
+```
