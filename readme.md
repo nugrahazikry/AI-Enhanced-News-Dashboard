@@ -458,17 +458,6 @@ docker push <region>-docker.pkg.dev/<project-id>/<repo-name>/<image-name>-fronte
 gcloud run services replace cloud-run-deploy.yaml --region <region>
 ```
 
-**Step 7 — Allow public access**
-
-```powershell
-gcloud run services add-iam-policy-binding <service-name> `
-  --region <region> `
-  --member="allUsers" `
-  --role="roles/run.invoker"
-```
-
-> Replace `<service-name>` with your Cloud Run service name.
-
 ---
 
 ## Contributors
